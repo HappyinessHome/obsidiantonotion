@@ -2,8 +2,11 @@ package com.xiaoma.obsidiantonotion.init;
 
 
 import com.xiaoma.obsidiantonotion.interndatas.ApplicationProperties;
+import com.xiaoma.obsidiantonotion.service.GetImageFromMarkUpload;
+import com.xiaoma.obsidiantonotion.threads.NotionThreadPools;
 import com.xiaoma.obsidiantonotion.utils.GetFiles;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
@@ -14,21 +17,26 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 @Slf4j
 @Component
 public class StartApplication implements ApplicationListener<ContextRefreshedEvent> {
-    @Value("notion.token")
+    @Value("${notion.token}")
     private String notionToken;
-    @Value("notion.pageId")
+    @Value("${notion.pageId}")
     private String notionPageId;
-    @Value("notion.uploadUrl")
+    @Value("${notion.uploadUrl}")
     private String notionUploadUrl;
-    @Value("note.rootfile")
+    @Value("${note.rootfile}")
     private String noteRootFile;
-    @Value("images.rootfile")
+    @Value("${images.rootfile}")
     private String imagesRootFile;
+    private GetImageFromMarkUpload getImageFromMarkUpload;
+    @Autowired
+    public StartApplication(GetImageFromMarkUpload getImageFromMarkUpload){
+        this.getImageFromMarkUpload=getImageFromMarkUpload;
+    }
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
         ApplicationProperties.notionPageId=notionPageId;
@@ -46,7 +54,32 @@ public class StartApplication implements ApplicationListener<ContextRefreshedEve
         GetFiles.getAllFiles(imagesRootFile,images);
         log.info("获取到图片:{}个",images.size());
         log.info(markdownFiles.toString(),images.toString());
+        int cpus = Runtime.getRuntime().availableProcessors();
+        log.info("获取到当前机器的核心数为:{},由于任务需要请求notionApi属于IO型,故核心线程池数量设置为{}:",cpus,cpus*2,cpus*3);
 
+        ThreadPoolExecutor threadPoolExecutor = NotionThreadPools.notionThreadPool(cpus * 2, cpus * 3);
+        List<Callable<Void>> tasks = new ArrayList<>();
+        markdownFiles.forEach(file -> {
+            tasks.add(() -> {
+                getImageFromMarkUpload.getImage(file, images);
+                return null;  // 这里返回 Void，因为我们不需要返回值
+            });
+        });
+        try {
+            List<Future<Void>> futures = threadPoolExecutor.invokeAll(tasks);
+            futures.forEach(voidFuture -> {
+                try {
+                    voidFuture.get();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                } catch (ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
 
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        log.info("上传修改完毕");
     }
 }

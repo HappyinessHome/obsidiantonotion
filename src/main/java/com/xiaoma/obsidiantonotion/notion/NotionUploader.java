@@ -10,18 +10,25 @@ import org.apache.http.entity.mime.content.FileBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
-
+@Component
 public class NotionUploader {
+    private String notionToken;
+    private String uploadUrl;
+    public NotionUploader(){
+        this.notionToken=ApplicationProperties.notionToken;
+        this.uploadUrl=ApplicationProperties.notionUploadUrl;
+    }
     // 上传图片并获取图片 URL
-    public static String uploadImage(File imageFile,String uploadUrl,String token) throws IOException {
+    public  String uploadImage(File imageFile) throws IOException {
         CloseableHttpClient httpClient = HttpClients.createDefault();
         HttpPost post = new HttpPost(uploadUrl);
 
         // 设置 Headers
-        post.setHeader("Authorization", "Bearer " + token);
+        post.setHeader("Authorization", "Bearer " + notionToken);
        // post.setHeader("Notion-Version", "2021-05-13");
 
         // 设置上传内容

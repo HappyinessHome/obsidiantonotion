@@ -6,6 +6,7 @@ import java.util.Map;
 
 public class GetFiles {
     public static void getAllFiles(String rootPath,List<File> fs){
+        System.out.println(rootPath);
         File file=new File(rootPath);
         File[] files = file.listFiles();
         for (File listFile : files) {
